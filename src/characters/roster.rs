@@ -1,4 +1,5 @@
-use super::actions::{Action, Character};
+use super::actions::{Action, Character, SpriteConfig};
+use bevy::prelude::*;
 
 /// All available characters in the game
 pub fn all_characters() -> Vec<Character> {
@@ -10,6 +11,14 @@ pub fn all_characters() -> Vec<Character> {
             action_b: Action::MoveRight,
             move_speed: 250.0,
             jump_force: 400.0,
+            sprite: Some(SpriteConfig::new(
+                "characters/walker.png",
+                UVec2::new(32, 48),
+                10,   // columns
+                10,   // rows
+                10,   // frame count (adjust as needed)
+                0.1,  // frame time
+            )),
         },
         // Jumper - can jump and move right
         Character {
@@ -18,6 +27,7 @@ pub fn all_characters() -> Vec<Character> {
             action_b: Action::MoveRight,
             move_speed: 200.0,
             jump_force: 500.0,
+            sprite: None,
         },
         // Reverse jumper - move left and jump
         Character {
@@ -26,6 +36,7 @@ pub fn all_characters() -> Vec<Character> {
             action_b: Action::Jump,
             move_speed: 200.0,
             jump_force: 500.0,
+            sprite: None,
         },
         // Speed demon - fast but can only go right and jump
         Character {
@@ -34,6 +45,7 @@ pub fn all_characters() -> Vec<Character> {
             action_b: Action::MoveRight,
             move_speed: 400.0,
             jump_force: 350.0,
+            sprite: None,
         },
         // Slow tank - slow but high jump
         Character {
@@ -42,6 +54,7 @@ pub fn all_characters() -> Vec<Character> {
             action_b: Action::MoveRight,
             move_speed: 150.0,
             jump_force: 600.0,
+            sprite: None,
         },
     ]
 }
