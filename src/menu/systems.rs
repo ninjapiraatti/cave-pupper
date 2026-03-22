@@ -1,12 +1,12 @@
 use bevy::prelude::*;
 
-use crate::constants::PLAYER_COLORS;
+use crate::input::InputBindings;
 use crate::state::GameState;
 
 #[derive(Component)]
 pub struct MenuUI;
 
-pub fn setup_menu(mut commands: Commands) {
+pub fn setup_menu(mut commands: Commands, bindings: Res<InputBindings>) {
     commands
         .spawn((
             MenuUI,
@@ -16,7 +16,7 @@ pub fn setup_menu(mut commands: Commands) {
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
-                row_gap: Val::Px(20.0),
+                row_gap: Val::Px(15.0),
                 ..default()
             },
             BackgroundColor(Color::srgb(0.1, 0.1, 0.15)),
@@ -24,7 +24,7 @@ pub fn setup_menu(mut commands: Commands) {
         .with_children(|parent| {
             // Title
             parent.spawn((
-                Text::new("EMO NEMO"),
+                Text::new("CAVE PUPPER"),
                 TextFont {
                     font_size: 80.0,
                     ..default()
@@ -34,7 +34,7 @@ pub fn setup_menu(mut commands: Commands) {
 
             // Subtitle
             parent.spawn((
-                Text::new("Couch Game Template"),
+                Text::new("2-Key Brawler"),
                 TextFont {
                     font_size: 30.0,
                     ..default()
@@ -44,11 +44,11 @@ pub fn setup_menu(mut commands: Commands) {
 
             // Spacer
             parent.spawn(Node {
-                height: Val::Px(40.0),
+                height: Val::Px(30.0),
                 ..default()
             });
 
-            // Controls info
+            // Controls header
             parent.spawn((
                 Text::new("CONTROLS"),
                 TextFont {
@@ -58,67 +58,52 @@ pub fn setup_menu(mut commands: Commands) {
                 TextColor(Color::srgb(0.9, 0.9, 0.3)),
             ));
 
-            // Player 1
-            parent.spawn((
-                Text::new("Player 1: WASD + Space"),
-                TextFont {
-                    font_size: 20.0,
-                    ..default()
-                },
-                TextColor(PLAYER_COLORS[0]),
-            ));
+            // Player bindings
+            let colors = [
+                Color::srgb(0.2, 0.6, 1.0),
+                Color::srgb(1.0, 0.3, 0.3),
+                Color::srgb(0.3, 1.0, 0.3),
+                Color::srgb(1.0, 1.0, 0.3),
+            ];
 
-            // Player 2
-            parent.spawn((
-                Text::new("Player 2: Arrow Keys + Enter"),
-                TextFont {
-                    font_size: 20.0,
-                    ..default()
-                },
-                TextColor(PLAYER_COLORS[1]),
-            ));
+            for (slot, color) in colors.iter().enumerate() {
+                let binding = bindings.get(slot);
+                parent.spawn((
+                    Text::new(format!(
+                        "Player {}: {:?} = Left, {:?} = Right",
+                        slot + 1,
+                        binding.key_a,
+                        binding.key_b
+                    )),
+                    TextFont {
+                        font_size: 20.0,
+                        ..default()
+                    },
+                    TextColor(*color),
+                ));
+            }
 
-            // Player 3
+            // More slots hint
             parent.spawn((
-                Text::new("Player 3: IJKL + U"),
+                Text::new("(4 more slots: A/S, D/F, G/H, O/P)"),
                 TextFont {
-                    font_size: 20.0,
+                    font_size: 16.0,
                     ..default()
                 },
-                TextColor(PLAYER_COLORS[2]),
-            ));
-
-            // Player 4
-            parent.spawn((
-                Text::new("Player 4: Numpad 8456 + 0"),
-                TextFont {
-                    font_size: 20.0,
-                    ..default()
-                },
-                TextColor(PLAYER_COLORS[3]),
-            ));
-
-            // Gamepad info
-            parent.spawn((
-                Text::new("Gamepads: Any button to join, Left stick to move"),
-                TextFont {
-                    font_size: 20.0,
-                    ..default()
-                },
-                TextColor(Color::srgb(0.7, 0.7, 0.7)),
+                TextColor(Color::srgb(0.5, 0.5, 0.5)),
             ));
 
             // Spacer
             parent.spawn(Node {
-                height: Val::Px(40.0),
+                height: Val::Px(30.0),
                 ..default()
             });
 
-            // Start instruction
+            // Instructions
             parent.spawn((
-                Text::new("Press SPACE or any gamepad button to start"),
+                Text::new("Press SPACE to start, then press your keys to join!"),
                 TextFont {
-                    font_size: 28.0,
+                    font_size: 24.0,
                     ..default()
                 },
                 TextColor(Color::WHITE),
@@ -134,22 +119,9 @@ pub fn cleanup_menu(mut commands: Commands, query: Query<Entity, With<MenuUI>>) 
 
 pub fn menu_input(
     keyboard: Res<ButtonInput<KeyCode>>,
-    gamepads: Query<&Gamepad>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
-    // Check keyboard
     if keyboard.just_pressed(KeyCode::Space) || keyboard.just_pressed(KeyCode::Enter) {
         next_state.set(GameState::Playing);
-        return;
-    }
-
-    // Check gamepads
-    for gamepad in &gamepads {
-        if gamepad.just_pressed(GamepadButton::South)
-            || gamepad.just_pressed(GamepadButton::Start)
-        {
-            next_state.set(GameState::Playing);
-            return;
-        }
     }
 }

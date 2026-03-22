@@ -1,146 +1,159 @@
+use avian2d::prelude::*;
 use bevy::prelude::*;
 
-use crate::constants::{MAX_PLAYERS, PLAYER_COLORS, PLAYER_KEYS, STICK_DEADZONE};
+use crate::arena::{DeathZone, SpawnPoint};
+use crate::characters::{Character, Grounded};
+use crate::combat::Health;
+use crate::input::PlayerInputs;
 
-use super::components::{InputSource, Player};
-use super::registry::PlayerRegistry;
+use super::components::{Player, PlayerSlots, SlotState};
 
-pub fn player_join(
+/// Player colors for each slot
+const SLOT_COLORS: [Color; 8] = [
+    Color::srgb(0.2, 0.6, 1.0),  // Blue
+    Color::srgb(1.0, 0.3, 0.3),  // Red
+    Color::srgb(0.3, 1.0, 0.3),  // Green
+    Color::srgb(1.0, 1.0, 0.3),  // Yellow
+    Color::srgb(1.0, 0.3, 1.0),  // Magenta
+    Color::srgb(0.3, 1.0, 1.0),  // Cyan
+    Color::srgb(1.0, 0.6, 0.2),  // Orange
+    Color::srgb(0.6, 0.3, 1.0),  // Purple
+];
+
+pub fn reset_slots(mut slots: ResMut<PlayerSlots>) {
+    slots.reset();
+}
+
+pub fn handle_join_respawn(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    keyboard: Res<ButtonInput<KeyCode>>,
-    gamepads: Query<(Entity, &Gamepad)>,
-    mut registry: ResMut<PlayerRegistry>,
+    inputs: Res<PlayerInputs>,
+    mut slots: ResMut<PlayerSlots>,
+    spawn_points: Query<&Transform, With<SpawnPoint>>,
 ) {
-    if registry.player_count() >= MAX_PLAYERS {
+    let spawn_positions: Vec<Vec2> = spawn_points
+        .iter()
+        .map(|t| t.translation.truncate())
+        .collect();
+
+    if spawn_positions.is_empty() {
         return;
     }
 
-    // Check keyboard joins
-    for (key_index, keys) in PLAYER_KEYS.iter().enumerate() {
-        let source = InputSource::Keyboard(key_index);
-        if registry.is_input_taken(&source) {
-            continue;
-        }
+    for slot in 0..8 {
+        let input = inputs.get(slot);
+        let state = slots.get(slot);
 
-        // Check if action key (5th key in tuple) is pressed
-        if keyboard.just_pressed(keys.4) {
-            spawn_player(&mut commands, &mut meshes, &mut materials, &mut registry, source);
-        }
-    }
-
-    // Check gamepad joins
-    for (gamepad_entity, gamepad) in &gamepads {
-        let source = InputSource::Gamepad(gamepad_entity);
-        if registry.is_input_taken(&source) {
-            continue;
-        }
-
-        if gamepad.just_pressed(GamepadButton::South)
-            || gamepad.just_pressed(GamepadButton::East)
-            || gamepad.just_pressed(GamepadButton::West)
-            || gamepad.just_pressed(GamepadButton::North)
-            || gamepad.just_pressed(GamepadButton::Start)
-        {
-            spawn_player(&mut commands, &mut meshes, &mut materials, &mut registry, source);
+        match state {
+            SlotState::Empty => {
+                if input.any_just_pressed() {
+                    // First press claims the slot, next press spawns
+                    slots.set(slot, SlotState::WaitingToSpawn);
+                    info!("Slot {} claimed, press again to spawn", slot);
+                }
+            }
+            SlotState::WaitingToSpawn | SlotState::Dead => {
+                if input.any_just_pressed() {
+                    // Spawn player
+                    let spawn_pos = spawn_positions[slot % spawn_positions.len()];
+                    let entity = spawn_player(&mut commands, slot, spawn_pos);
+                    slots.set(slot, SlotState::Alive(entity));
+                    info!("Player {} spawned", slot);
+                }
+            }
+            SlotState::Alive(_) => {
+                // Player is alive, nothing to do here
+            }
         }
     }
 }
 
-fn spawn_player(
-    commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<ColorMaterial>>,
-    registry: &mut ResMut<PlayerRegistry>,
-    source: InputSource,
-) {
-    let player_id = registry.player_count();
-    let color = PLAYER_COLORS[player_id];
+fn spawn_player(commands: &mut Commands, slot: usize, position: Vec2) -> Entity {
+    let color = SLOT_COLORS[slot];
 
-    // Calculate spawn position (spread players out)
-    let angle = (player_id as f32) * std::f32::consts::TAU / 4.0;
-    let spawn_distance = 150.0;
-    let spawn_pos = Vec3::new(
-        angle.cos() * spawn_distance,
-        angle.sin() * spawn_distance,
-        0.0,
-    );
-
-    let entity = commands
+    commands
         .spawn((
-            Player {
-                id: player_id,
-                input_source: source,
+            Player { slot },
+            Health::new(100),
+            Character::basic_mover(),
+            Grounded(false),
+            RigidBody::Dynamic,
+            Collider::rectangle(30.0, 40.0),
+            LinearVelocity::ZERO,
+            LockedAxes::ROTATION_LOCKED,
+            Friction::new(0.3),
+            Restitution::new(0.0),
+            Transform::from_translation(position.extend(0.0)),
+            Sprite {
+                color,
+                custom_size: Some(Vec2::new(30.0, 40.0)),
+                ..default()
             },
-            Mesh2d(meshes.add(Circle::new(30.0))),
-            MeshMaterial2d(materials.add(ColorMaterial::from_color(color))),
-            Transform::from_translation(spawn_pos),
         ))
-        .id();
-
-    registry.add_player(entity, source);
-    info!("Player {} joined with {:?}", player_id + 1, source);
+        .id()
 }
 
-pub fn player_movement(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    gamepads: Query<&Gamepad>,
-    mut players: Query<(&Player, &mut Transform)>,
-    time: Res<Time>,
+pub fn update_grounded(
+    mut query: Query<(Entity, &mut Grounded, &CollidingEntities)>,
+    transforms: Query<&Transform>,
 ) {
-    let speed = 300.0;
+    for (entity, mut grounded, colliding) in &mut query {
+        let player_y = transforms
+            .get(entity)
+            .map(|t| t.translation.y)
+            .unwrap_or(0.0);
 
-    for (player, mut transform) in &mut players {
-        let mut direction = Vec2::ZERO;
-
-        match player.input_source {
-            InputSource::Keyboard(key_index) => {
-                let keys = PLAYER_KEYS[key_index];
-                if keyboard.pressed(keys.0) {
-                    direction.y += 1.0;
-                }
-                if keyboard.pressed(keys.1) {
-                    direction.y -= 1.0;
-                }
-                if keyboard.pressed(keys.2) {
-                    direction.x -= 1.0;
-                }
-                if keyboard.pressed(keys.3) {
-                    direction.x += 1.0;
-                }
+        // Check if any collision is below us
+        grounded.0 = colliding.iter().any(|other| {
+            if let Ok(other_tf) = transforms.get(*other) {
+                // Other entity is below us
+                other_tf.translation.y < player_y - 10.0
+            } else {
+                false
             }
-            InputSource::Gamepad(gamepad_entity) => {
-                if let Ok(gamepad) = gamepads.get(gamepad_entity) {
-                    let left_stick = gamepad.left_stick();
+        });
+    }
+}
 
-                    // Apply deadzone to prevent drift
-                    if left_stick.length() > STICK_DEADZONE {
-                        direction.x = left_stick.x;
-                        direction.y = left_stick.y;
-                    }
+pub fn apply_friction(
+    inputs: Res<PlayerInputs>,
+    mut query: Query<(&Player, &mut LinearVelocity)>,
+) {
+    // Apply friction when no movement keys are pressed
+    for (player, mut velocity) in &mut query {
+        let input = inputs.get(player.slot);
 
-                    // Also support D-pad
-                    if gamepad.pressed(GamepadButton::DPadUp) {
-                        direction.y += 1.0;
-                    }
-                    if gamepad.pressed(GamepadButton::DPadDown) {
-                        direction.y -= 1.0;
-                    }
-                    if gamepad.pressed(GamepadButton::DPadLeft) {
-                        direction.x -= 1.0;
-                    }
-                    if gamepad.pressed(GamepadButton::DPadRight) {
-                        direction.x += 1.0;
-                    }
-                }
+        // Only apply friction if no movement input
+        if !input.key_a_pressed && !input.key_b_pressed {
+            velocity.x *= 0.85;
+
+            // Stop completely if very slow
+            if velocity.x.abs() < 1.0 {
+                velocity.x = 0.0;
             }
         }
+    }
+}
 
-        if direction != Vec2::ZERO {
-            direction = direction.normalize();
-            transform.translation.x += direction.x * speed * time.delta_secs();
-            transform.translation.y += direction.y * speed * time.delta_secs();
+pub fn check_death_zone(
+    mut commands: Commands,
+    mut slots: ResMut<PlayerSlots>,
+    collisions: Collisions,
+    players: Query<&Player>,
+    death_zones: Query<Entity, With<DeathZone>>,
+) {
+    for death_zone in &death_zones {
+        for player_entity in collisions.entities_colliding_with(death_zone) {
+            if let Ok(player) = players.get(player_entity) {
+                info!("Player {} fell into death zone", player.slot);
+                slots.set(player.slot, SlotState::Dead);
+                commands.entity(player_entity).despawn();
+            }
         }
+    }
+}
+
+pub fn cleanup_players(mut commands: Commands, query: Query<Entity, With<Player>>) {
+    for entity in &query {
+        commands.entity(entity).despawn();
     }
 }
