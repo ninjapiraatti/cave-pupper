@@ -1,6 +1,8 @@
 mod actions;
+mod roster;
 
 pub use actions::*;
+pub use roster::*;
 
 use bevy::prelude::*;
 

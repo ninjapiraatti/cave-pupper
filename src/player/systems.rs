@@ -2,7 +2,7 @@ use avian2d::prelude::*;
 use bevy::prelude::*;
 
 use crate::arena::{DeathZone, SpawnPoint};
-use crate::characters::{Character, Grounded};
+use crate::characters::{character_for_slot, Grounded};
 use crate::combat::Health;
 use crate::input::PlayerInputs;
 
@@ -69,15 +69,18 @@ pub fn handle_join_respawn(
 
 fn spawn_player(commands: &mut Commands, slot: usize, position: Vec2) -> Entity {
     let color = SLOT_COLORS[slot];
+    let character = character_for_slot(slot);
+    info!("Spawning {} for slot {}", character.name, slot);
 
     commands
         .spawn((
             Player { slot },
             Health::new(100),
-            Character::basic_mover(),
+            character,
             Grounded(false),
             RigidBody::Dynamic,
             Collider::rectangle(30.0, 40.0),
+            CollidingEntities::default(),
             LinearVelocity::ZERO,
             LockedAxes::ROTATION_LOCKED,
             Friction::new(0.3),
