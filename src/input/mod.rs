@@ -18,6 +18,7 @@ fn read_player_inputs(
     keyboard: Res<ButtonInput<KeyCode>>,
     bindings: Res<InputBindings>,
     mut inputs: ResMut<PlayerInputs>,
+    time: Res<Time>,
 ) {
-    inputs.update(&keyboard, &bindings);
+    inputs.update(&keyboard, &bindings, time.elapsed_secs());
 }

@@ -4,11 +4,13 @@ use bevy::prelude::*;
 /// All available characters in the game
 pub fn all_characters() -> Vec<Character> {
     vec![
-        // Basic mover - simple left/right
+        // Basic mover - simple left/right, double-tap to jump
         Character {
             name: "Walker".to_string(),
             action_a: Action::MoveLeft,
             action_b: Action::MoveRight,
+            double_tap_action_a: Some(Action::Jump),
+            double_tap_action_b: Some(Action::Jump),
             move_speed: 250.0,
             jump_force: 400.0,
             sprite: Some(SpriteConfig::new(
@@ -25,6 +27,8 @@ pub fn all_characters() -> Vec<Character> {
             name: "Hopper".to_string(),
             action_a: Action::Jump,
             action_b: Action::MoveRight,
+            double_tap_action_a: None,
+            double_tap_action_b: None,
             move_speed: 200.0,
             jump_force: 500.0,
             sprite: None,
@@ -34,6 +38,8 @@ pub fn all_characters() -> Vec<Character> {
             name: "Lefty".to_string(),
             action_a: Action::MoveLeft,
             action_b: Action::Jump,
+            double_tap_action_a: None,
+            double_tap_action_b: None,
             move_speed: 200.0,
             jump_force: 500.0,
             sprite: None,
@@ -43,6 +49,8 @@ pub fn all_characters() -> Vec<Character> {
             name: "Speedy".to_string(),
             action_a: Action::Jump,
             action_b: Action::MoveRight,
+            double_tap_action_a: None,
+            double_tap_action_b: None,
             move_speed: 400.0,
             jump_force: 350.0,
             sprite: None,
@@ -52,6 +60,8 @@ pub fn all_characters() -> Vec<Character> {
             name: "Tanky".to_string(),
             action_a: Action::MoveLeft,
             action_b: Action::MoveRight,
+            double_tap_action_a: None,
+            double_tap_action_b: None,
             move_speed: 150.0,
             jump_force: 600.0,
             sprite: None,

@@ -48,10 +48,11 @@ src/
 
 ### Key Types
 - `Player` - Component with slot ID
-- `Character` - Component with action_a, action_b, stats
+- `Character` - Component with action_a, action_b, optional double_tap_action_a/b, stats
 - `Action` - Enum (MoveLeft, MoveRight, Jump, ...)
 - `PlayerSlots` - Resource tracking slot states
 - `SlotState` - Empty, WaitingToSpawn, Alive(Entity), Dead
+- `PlayerInput` - Tracks key states including double-tap detection (300ms threshold)
 
 ## Adding New Characters
 
@@ -77,23 +78,21 @@ Action::Dash => {
 }
 ```
 
-3. Create a new character constructor:
+3. Create a new character in `src/characters/roster.rs`:
 ```rust
-pub fn dasher() -> Self {
-    Self {
-        name: "Dasher".to_string(),
-        action_a: Action::Dash,
-        action_b: Action::MoveRight,
-        move_speed: 300.0,
-        jump_force: 400.0,
-    }
+Character {
+    name: "Dasher".to_string(),
+    action_a: Action::Dash,
+    action_b: Action::MoveRight,
+    double_tap_action_a: Some(Action::Jump),  // optional
+    double_tap_action_b: None,                // optional
+    move_speed: 300.0,
+    jump_force: 400.0,
+    sprite: None,
 }
 ```
 
-4. Use it in `player/systems.rs` `spawn_player()`:
-```rust
-Character::dasher(),
-```
+4. Add it to the `all_characters()` vector in `roster.rs`
 
 ## Physics
 Using avian2d for 2D physics:

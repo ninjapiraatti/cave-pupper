@@ -47,6 +47,8 @@ pub struct Character {
     pub name: String,
     pub action_a: Action,
     pub action_b: Action,
+    pub double_tap_action_a: Option<Action>,
+    pub double_tap_action_b: Option<Action>,
     pub move_speed: f32,
     pub jump_force: f32,
     pub sprite: Option<SpriteConfig>,
@@ -59,6 +61,8 @@ impl Character {
             name: "Mover".to_string(),
             action_a: Action::MoveLeft,
             action_b: Action::MoveRight,
+            double_tap_action_a: None,
+            double_tap_action_b: None,
             move_speed: 250.0,
             jump_force: 400.0,
             sprite: None,
@@ -71,6 +75,8 @@ impl Character {
             name: "Jumper".to_string(),
             action_a: Action::Jump,
             action_b: Action::MoveRight,
+            double_tap_action_a: None,
+            double_tap_action_b: None,
             move_speed: 250.0,
             jump_force: 500.0,
             sprite: None,
@@ -90,8 +96,18 @@ pub fn execute_actions(
     for (player, character, mut velocity, grounded) in &mut query {
         let input = inputs.get(player.slot);
 
-        // Execute action A
-        if input.key_a_pressed || input.key_a_just_pressed {
+        // Execute action A (double-tap takes priority)
+        if input.key_a_double_tapped {
+            if let Some(action) = character.double_tap_action_a {
+                execute_action(
+                    action,
+                    character,
+                    &mut velocity,
+                    grounded.0,
+                    true,
+                );
+            }
+        } else if input.key_a_pressed || input.key_a_just_pressed {
             execute_action(
                 character.action_a,
                 character,
@@ -101,8 +117,18 @@ pub fn execute_actions(
             );
         }
 
-        // Execute action B
-        if input.key_b_pressed || input.key_b_just_pressed {
+        // Execute action B (double-tap takes priority)
+        if input.key_b_double_tapped {
+            if let Some(action) = character.double_tap_action_b {
+                execute_action(
+                    action,
+                    character,
+                    &mut velocity,
+                    grounded.0,
+                    true,
+                );
+            }
+        } else if input.key_b_pressed || input.key_b_just_pressed {
             execute_action(
                 character.action_b,
                 character,
