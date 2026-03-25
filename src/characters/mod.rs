@@ -3,7 +3,7 @@ mod animation;
 mod roster;
 
 pub use actions::{Action, Character, Grounded, SpriteConfig, execute_actions};
-pub use animation::AnimationPlayer;
+pub use animation::{AnimationPlayer, FacingDirection};
 pub use roster::*;
 
 use bevy::prelude::*;

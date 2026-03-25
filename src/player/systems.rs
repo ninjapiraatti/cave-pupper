@@ -2,7 +2,7 @@ use avian2d::prelude::*;
 use bevy::prelude::*;
 
 use crate::arena::{DeathZone, SpawnPoint};
-use crate::characters::{character_for_slot, AnimationPlayer, Grounded};
+use crate::characters::{character_for_slot, AnimationPlayer, FacingDirection, Grounded};
 use crate::combat::Health;
 use crate::input::PlayerInputs;
 
@@ -119,6 +119,7 @@ fn spawn_player(
                 ..default()
             },
             AnimationPlayer::new(sprite_config.frame_time, sprite_config.frame_count),
+            FacingDirection::default(),
         ));
     } else {
         entity_commands.insert(Sprite {

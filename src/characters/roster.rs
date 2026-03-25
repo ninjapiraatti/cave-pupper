@@ -14,12 +14,12 @@ pub fn all_characters() -> Vec<Character> {
             move_speed: 250.0,
             jump_force: 400.0,
             sprite: Some(SpriteConfig::new(
-                "characters/walker.png",
-                UVec2::new(32, 48),
-                10,   // columns
-                10,   // rows
-                10,   // frame count (adjust as needed)
-                0.1,  // frame time
+                "characters/character_test01.png",
+                UVec2::new(64, 110),
+                4,   // columns
+                1,   // rows
+                4,   // frame count
+                0.1, // frame time
             )),
         },
         // Jumper - can jump and move right
