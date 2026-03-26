@@ -1,7 +1,7 @@
 mod components;
 mod systems;
 
-pub use components::{Player, PlayerSlots};
+pub use components::{Player, PlayerSlots, SlotState};
 
 use bevy::prelude::*;
 
@@ -18,6 +18,7 @@ impl Plugin for PlayerPlugin {
                 (
                     systems::handle_join_respawn,
                     systems::update_grounded,
+                    systems::handle_wall_contacts,
                     systems::apply_friction,
                     systems::check_death_zone,
                 )

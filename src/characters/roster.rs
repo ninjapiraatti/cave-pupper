@@ -12,7 +12,7 @@ pub fn all_characters() -> Vec<Character> {
             double_tap_action_a: Some(Action::Jump),
             double_tap_action_b: Some(Action::Jump),
             move_speed: 250.0,
-            jump_force: 400.0,
+            jump_force: 800.0,
             sprite: Some(SpriteConfig::new(
                 "characters/character_test01.png",
                 UVec2::new(64, 110),
@@ -30,7 +30,7 @@ pub fn all_characters() -> Vec<Character> {
             double_tap_action_a: None,
             double_tap_action_b: None,
             move_speed: 200.0,
-            jump_force: 500.0,
+            jump_force: 1000.0,
             sprite: None,
         },
         // Reverse jumper - move left and jump
@@ -41,7 +41,7 @@ pub fn all_characters() -> Vec<Character> {
             double_tap_action_a: None,
             double_tap_action_b: None,
             move_speed: 200.0,
-            jump_force: 500.0,
+            jump_force: 1000.0,
             sprite: None,
         },
         // Speed demon - fast but can only go right and jump
@@ -52,7 +52,7 @@ pub fn all_characters() -> Vec<Character> {
             double_tap_action_a: None,
             double_tap_action_b: None,
             move_speed: 400.0,
-            jump_force: 350.0,
+            jump_force: 700.0,
             sprite: None,
         },
         // Slow tank - slow but high jump
@@ -63,7 +63,7 @@ pub fn all_characters() -> Vec<Character> {
             double_tap_action_a: None,
             double_tap_action_b: None,
             move_speed: 150.0,
-            jump_force: 600.0,
+            jump_force: 1200.0,
             sprite: None,
         },
     ]
