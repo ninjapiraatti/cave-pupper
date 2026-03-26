@@ -6,14 +6,16 @@ pub use components::*;
 use avian2d::prelude::*;
 use bevy::prelude::*;
 
+use crate::levels::{all_levels, HazardKind, LevelDef};
 use crate::state::GameState;
 
 pub struct ArenaPlugin;
 
 impl Plugin for ArenaPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::Playing), spawn_arena)
-            .add_systems(OnExit(GameState::Playing), cleanup_arena)
+        app.init_resource::<CurrentLevel>()
+            .add_systems(OnEnter(GameState::Playing), spawn_arena)
+            .add_systems(OnExit(GameState::Playing), (cleanup_arena, reset_level))
             .add_systems(
                 Update,
                 (
@@ -30,136 +32,120 @@ impl Plugin for ArenaPlugin {
     }
 }
 
-fn spawn_arena(mut commands: Commands) {
-    // Ground platform
-    commands.spawn((
-        ArenaElement,
-        Platform,
-        RigidBody::Static,
-        Collider::rectangle(800.0, 40.0),
-        Transform::from_xyz(0.0, -200.0, 0.0),
-        Sprite {
-            color: Color::srgb(0.4, 0.4, 0.4),
-            custom_size: Some(Vec2::new(800.0, 40.0)),
-            ..default()
-        },
-    ));
+/// Tracks the current level index
+#[derive(Resource, Default)]
+pub struct CurrentLevel {
+    pub index: usize,
+}
 
-    // Left platform
-    commands.spawn((
-        ArenaElement,
-        Platform,
-        RigidBody::Static,
-        Collider::rectangle(200.0, 20.0),
-        Transform::from_xyz(-250.0, -50.0, 0.0),
-        Sprite {
-            color: Color::srgb(0.4, 0.4, 0.4),
-            custom_size: Some(Vec2::new(200.0, 20.0)),
-            ..default()
-        },
-    ));
+impl CurrentLevel {
+    pub fn get_level(&self) -> LevelDef {
+        let levels = all_levels();
+        levels[self.index % levels.len()].clone()
+    }
 
-    // Right platform
-    commands.spawn((
-        ArenaElement,
-        Platform,
-        RigidBody::Static,
-        Collider::rectangle(200.0, 20.0),
-        Transform::from_xyz(250.0, -50.0, 0.0),
-        Sprite {
-            color: Color::srgb(0.4, 0.4, 0.4),
-            custom_size: Some(Vec2::new(200.0, 20.0)),
-            ..default()
-        },
-    ));
+    pub fn next(&mut self) {
+        self.index += 1;
+    }
+}
 
-    // Top platform
-    commands.spawn((
-        ArenaElement,
-        Platform,
-        RigidBody::Static,
-        Collider::rectangle(150.0, 20.0),
-        Transform::from_xyz(0.0, 100.0, 0.0),
-        Sprite {
-            color: Color::srgb(0.4, 0.4, 0.4),
-            custom_size: Some(Vec2::new(150.0, 20.0)),
-            ..default()
-        },
-    ));
+fn spawn_arena(mut commands: Commands, current_level: Res<CurrentLevel>) {
+    let level = current_level.get_level();
+    spawn_level(&mut commands, &level);
+}
 
-    // Death zone (bottom of screen)
+pub fn spawn_level(commands: &mut Commands, level: &LevelDef) {
+    info!("Spawning level: {}", level.name);
+
+    // Spawn platforms
+    for platform_def in &level.platforms {
+        let mut entity = commands.spawn((
+            ArenaElement,
+            Platform,
+            Collider::rectangle(platform_def.size.x, platform_def.size.y),
+            Transform::from_xyz(platform_def.pos.x, platform_def.pos.y, 0.0),
+            Sprite {
+                color: platform_def.color,
+                custom_size: Some(platform_def.size),
+                ..default()
+            },
+        ));
+
+        // Add movable if defined
+        if let Some(ref movable) = platform_def.movable {
+            entity.insert((
+                RigidBody::Kinematic,
+                Movable {
+                    waypoints: movable.waypoints.clone(),
+                    speed: movable.speed,
+                    current_index: 0,
+                    forward: true,
+                    current_velocity: Vec2::ZERO,
+                },
+            ));
+        } else {
+            entity.insert(RigidBody::Static);
+        }
+
+        // Add crumbling if defined
+        if let Some(ref crumbling) = platform_def.crumbling {
+            entity.insert(Crumbling {
+                stand_time: crumbling.stand_time,
+                delay: crumbling.delay,
+                respawn_time: crumbling.respawn_time,
+            });
+        }
+    }
+
+    // Spawn hazards
+    for hazard in &level.hazards {
+        match hazard.kind {
+            HazardKind::Spike => {
+                commands.spawn((
+                    ArenaElement,
+                    Deadly,
+                    RigidBody::Static,
+                    Collider::triangle(
+                        Vec2::new(-20.0, -15.0),
+                        Vec2::new(20.0, -15.0),
+                        Vec2::new(0.0, 15.0),
+                    ),
+                    Transform::from_xyz(hazard.pos.x, hazard.pos.y, 0.0),
+                    Sprite {
+                        color: Color::srgb(0.8, 0.2, 0.2),
+                        custom_size: Some(Vec2::new(40.0, 30.0)),
+                        ..default()
+                    },
+                ));
+            }
+        }
+    }
+
+    // Spawn death zone
     commands.spawn((
         ArenaElement,
         DeathZone,
         Collider::rectangle(2000.0, 100.0),
-        Transform::from_xyz(0.0, -450.0, 0.0),
+        Transform::from_xyz(0.0, level.death_zone_y, 0.0),
         Sensor,
     ));
 
-    // Spawn points - centered, above the highest platform (top platform is at y=100)
-    let spawn_y = 200.0; // Well above the top platform
-    commands.spawn((ArenaElement, SpawnPoint, Transform::from_xyz(-100.0, spawn_y, 0.0)));
-    commands.spawn((ArenaElement, SpawnPoint, Transform::from_xyz(0.0, spawn_y, 0.0)));
-    commands.spawn((ArenaElement, SpawnPoint, Transform::from_xyz(100.0, spawn_y, 0.0)));
-    commands.spawn((ArenaElement, SpawnPoint, Transform::from_xyz(0.0, spawn_y, 0.0))); // Extra center spawn
-
-    // Example: Deadly spike - triangle centered on origin
-    commands.spawn((
-        ArenaElement,
-        Deadly,
-        RigidBody::Static,
-        Collider::triangle(Vec2::new(-20.0, -15.0), Vec2::new(20.0, -15.0), Vec2::new(0.0, 15.0)),
-        Transform::from_xyz(0.0, -165.0, 0.0), // Adjusted so spike sits on ground
-        Sprite {
-            color: Color::srgb(0.8, 0.2, 0.2),
-            custom_size: Some(Vec2::new(40.0, 30.0)),
-            ..default()
-        },
-    ));
-
-    // Example: Moving platform
-    commands.spawn((
-        ArenaElement,
-        Platform,
-        Movable {
-            waypoints: vec![Vec2::new(-350.0, 50.0), Vec2::new(350.0, 50.0)],
-            speed: 80.0,
-            current_index: 0,
-            forward: true,
-            current_velocity: Vec2::ZERO,
-        },
-        RigidBody::Kinematic,
-        Collider::rectangle(100.0, 15.0),
-        Transform::from_xyz(-350.0, 50.0, 0.0),
-        Sprite {
-            color: Color::srgb(0.3, 0.5, 0.3),
-            custom_size: Some(Vec2::new(100.0, 15.0)),
-            ..default()
-        },
-    ));
-
-    // Example: Crumbling platform
-    commands.spawn((
-        ArenaElement,
-        Platform,
-        Crumbling {
-            stand_time: 1.0,   // Must stand for 1 second
-            delay: 0.3,        // Then 0.3s warning before crumble
-            respawn_time: 3.0,
-        },
-        RigidBody::Static,
-        Collider::rectangle(80.0, 15.0),
-        Transform::from_xyz(0.0, -80.0, 0.0),
-        Sprite {
-            color: Color::srgb(0.6, 0.4, 0.2),
-            custom_size: Some(Vec2::new(80.0, 15.0)),
-            ..default()
-        },
-    ));
+    // Spawn points
+    for spawn_pos in &level.spawn_points {
+        commands.spawn((
+            ArenaElement,
+            SpawnPoint,
+            Transform::from_xyz(spawn_pos.x, spawn_pos.y, 0.0),
+        ));
+    }
 }
 
-fn cleanup_arena(mut commands: Commands, query: Query<Entity, With<ArenaElement>>) {
+pub fn cleanup_arena(mut commands: Commands, query: Query<Entity, With<ArenaElement>>) {
     for entity in &query {
         commands.entity(entity).despawn();
     }
+}
+
+fn reset_level(mut current_level: ResMut<CurrentLevel>) {
+    current_level.index = 0;
 }

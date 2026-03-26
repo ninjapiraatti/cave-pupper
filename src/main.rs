@@ -3,8 +3,10 @@ mod characters;
 mod combat;
 mod game;
 mod input;
+mod levels;
 mod menu;
 mod player;
+mod round;
 mod state;
 
 use avian2d::prelude::*;
@@ -32,6 +34,7 @@ fn main() {
             player::PlayerPlugin,
             characters::CharacterPlugin,
             combat::CombatPlugin,
+            round::RoundPlugin,
         ))
         .add_systems(Startup, setup)
         .run();
