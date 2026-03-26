@@ -21,6 +21,7 @@ fn main() {
             ..default()
         }))
         .add_plugins(PhysicsPlugins::default().with_length_unit(100.0))
+        .add_plugins(PhysicsDebugPlugin::default())
         .insert_resource(Gravity(Vec2::NEG_Y * 980.0))
         .init_state::<state::GameState>()
         .add_plugins((

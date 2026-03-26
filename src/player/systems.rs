@@ -82,22 +82,29 @@ fn spawn_player(
     let character = character_for_slot(slot);
     info!("Spawning {} for slot {}", character.name, slot);
 
+    // Capsule collider: radius 10.5 (21 wide), length 70 (total height ~91)
+    let collider_radius = 10.5;
+    let collider_length = 70.0; // Increased by 50% from ~47
+    let collider_total_height = collider_length + collider_radius * 2.0;
+
     let mut entity_commands = commands.spawn((
         Player { slot },
         Health::new(100),
         character.clone(),
         Grounded(false),
         RigidBody::Dynamic,
-        Collider::rectangle(30.0, 40.0),
+        Collider::capsule(collider_radius, collider_length),
         CollidingEntities::default(),
         LinearVelocity::ZERO,
         LockedAxes::ROTATION_LOCKED,
         Friction::new(0.3),
         Restitution::new(0.0),
-        Transform::from_translation(position.extend(0.0)),
+        // Spawn with collider bottom at the spawn point
+        Transform::from_translation(position.extend(0.0) + Vec3::Y * (collider_total_height / 2.0)),
     ));
 
     // Add sprite - either from atlas or fallback colored box
+    // Use custom anchor to align sprite bottom with collider bottom
     if let Some(ref sprite_config) = character.sprite {
         let texture = asset_server.load(&sprite_config.path);
         let layout = TextureAtlasLayout::from_grid(
@@ -109,6 +116,12 @@ fn spawn_player(
         );
         let layout_handle = texture_atlas_layouts.add(layout);
 
+        // Custom anchor: sprite bottom should be at collider bottom (entity.y - collider_height/2)
+        // Anchor Y of -0.5 = bottom at entity, we need bottom at entity - collider_height/2
+        // So we need anchor Y = -0.5 + (collider_height/2) / sprite_height
+        let sprite_height = sprite_config.tile_size.y as f32;
+        let anchor_y = -0.5 + (collider_total_height / 2.0) / sprite_height;
+
         entity_commands.insert((
             Sprite {
                 image: texture,
@@ -118,13 +131,15 @@ fn spawn_player(
                 }),
                 ..default()
             },
+            bevy::sprite::Anchor(Vec2::new(0.0, anchor_y)),
             AnimationPlayer::new(sprite_config.frame_time, sprite_config.frame_count),
             FacingDirection::default(),
         ));
     } else {
+        // Fallback colored box matches collider size
         entity_commands.insert(Sprite {
             color,
-            custom_size: Some(Vec2::new(30.0, 40.0)),
+            custom_size: Some(Vec2::new(collider_radius * 2.0, collider_total_height)),
             ..default()
         });
     }
@@ -133,36 +148,80 @@ fn spawn_player(
 }
 
 pub fn update_grounded(
-    mut query: Query<(Entity, &mut Grounded, &CollidingEntities)>,
-    transforms: Query<&Transform>,
+    mut query: Query<(Entity, &mut Grounded)>,
+    collisions: Collisions,
 ) {
-    for (entity, mut grounded, colliding) in &mut query {
-        let player_y = transforms
-            .get(entity)
-            .map(|t| t.translation.y)
-            .unwrap_or(0.0);
+    for (entity, mut grounded) in &mut query {
+        grounded.0 = false;
 
-        grounded.0 = colliding.iter().any(|other| {
-            if let Ok(other_tf) = transforms.get(*other) {
-                other_tf.translation.y < player_y - 10.0
-            } else {
-                false
+        // Check all contacts for this entity
+        for contacts in collisions.collisions_with(entity) {
+            for manifold in contacts.manifolds.iter() {
+                // Normal points from body1 to body2
+                // If we're body1, a ground contact has normal pointing down (we're above)
+                // If we're body2, a ground contact has normal pointing up (we're below the other)
+                let normal = if contacts.body1 == Some(entity) {
+                    -manifold.normal
+                } else {
+                    manifold.normal
+                };
+
+                // Ground contact if normal points mostly up (we're standing on something)
+                if normal.y > 0.5 {
+                    grounded.0 = true;
+                    return;
+                }
             }
-        });
+        }
     }
 }
 
 pub fn apply_friction(
     inputs: Res<PlayerInputs>,
-    mut query: Query<(&Player, &mut LinearVelocity)>,
+    mut query: Query<(&Player, &Grounded, &mut LinearVelocity)>,
 ) {
-    for (player, mut velocity) in &mut query {
+    for (player, grounded, mut velocity) in &mut query {
         let input = inputs.get(player.slot);
 
-        if !input.key_a_pressed && !input.key_b_pressed {
+        // Only apply horizontal friction when grounded and not pressing movement keys
+        if grounded.0 && !input.key_a_pressed && !input.key_b_pressed {
             velocity.x *= 0.85;
             if velocity.x.abs() < 1.0 {
                 velocity.x = 0.0;
+            }
+        }
+    }
+}
+
+/// Prevents players from sticking to walls by detecting wall contacts
+pub fn handle_wall_contacts(
+    mut query: Query<(Entity, &Grounded, &mut LinearVelocity)>,
+    collisions: Collisions,
+) {
+    for (entity, grounded, mut velocity) in &mut query {
+        if grounded.0 {
+            continue; // Don't interfere when grounded
+        }
+
+        for contacts in collisions.collisions_with(entity) {
+            for manifold in contacts.manifolds.iter() {
+                let normal = if contacts.body1 == Some(entity) {
+                    -manifold.normal
+                } else {
+                    manifold.normal
+                };
+
+                // Wall contact if normal is mostly horizontal
+                if normal.y.abs() < 0.3 {
+                    // Cancel velocity toward the wall
+                    if normal.x > 0.0 && velocity.x < 0.0 {
+                        // Wall is to the left, player moving left
+                        velocity.x = 0.0;
+                    } else if normal.x < 0.0 && velocity.x > 0.0 {
+                        // Wall is to the right, player moving right
+                        velocity.x = 0.0;
+                    }
+                }
             }
         }
     }
