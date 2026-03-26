@@ -2,7 +2,7 @@ use avian2d::prelude::*;
 use bevy::prelude::*;
 
 use crate::arena::{DeathZone, SpawnPoint};
-use crate::characters::{character_for_slot, AnimationPlayer, FacingDirection, Grounded};
+use crate::characters::{AnimationPlayer, FacingDirection, Grounded};
 use crate::combat::Health;
 use crate::input::PlayerInputs;
 
@@ -24,23 +24,13 @@ pub fn reset_slots(mut slots: ResMut<PlayerSlots>) {
     slots.reset();
 }
 
+/// Preview duration in seconds
+const PREVIEW_DURATION: f32 = 1.5;
+
 pub fn handle_join_respawn(
-    mut commands: Commands,
     inputs: Res<PlayerInputs>,
     mut slots: ResMut<PlayerSlots>,
-    spawn_points: Query<&Transform, With<SpawnPoint>>,
-    asset_server: Res<AssetServer>,
-    mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
 ) {
-    let spawn_positions: Vec<Vec2> = spawn_points
-        .iter()
-        .map(|t| t.translation.truncate())
-        .collect();
-
-    if spawn_positions.is_empty() {
-        return;
-    }
-
     for slot in 0..8 {
         let input = inputs.get(slot);
         let state = slots.get(slot);
@@ -54,19 +44,56 @@ pub fn handle_join_respawn(
             }
             SlotState::WaitingToSpawn | SlotState::Dead => {
                 if input.any_just_pressed() {
-                    let spawn_pos = spawn_positions[slot % spawn_positions.len()];
-                    let entity = spawn_player(
-                        &mut commands,
-                        slot,
-                        spawn_pos,
-                        &asset_server,
-                        &mut texture_atlas_layouts,
-                    );
-                    slots.set(slot, SlotState::Alive(entity));
-                    info!("Player {} spawned", slot);
+                    // Pick random character and start preview
+                    let roster = crate::characters::all_characters();
+                    let char_index = rand::random_range(0..roster.len());
+                    slots.set(slot, SlotState::Previewing(char_index, PREVIEW_DURATION));
+                    info!("Player {} previewing character: {}", slot, roster[char_index].name);
                 }
             }
-            SlotState::Alive(_) => {}
+            SlotState::Previewing(_, _) | SlotState::Alive(_) => {}
+        }
+    }
+}
+
+/// Updates preview timers and spawns players when preview is done
+pub fn update_previews(
+    mut commands: Commands,
+    mut slots: ResMut<PlayerSlots>,
+    spawn_points: Query<&Transform, With<SpawnPoint>>,
+    asset_server: Res<AssetServer>,
+    mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
+    time: Res<Time>,
+) {
+    let spawn_positions: Vec<Vec2> = spawn_points
+        .iter()
+        .map(|t| t.translation.truncate())
+        .collect();
+
+    if spawn_positions.is_empty() {
+        return;
+    }
+
+    for slot in 0..8 {
+        if let SlotState::Previewing(char_index, remaining) = slots.get(slot) {
+            let new_remaining = remaining - time.delta_secs();
+
+            if new_remaining <= 0.0 {
+                // Preview done, spawn the player
+                let spawn_pos = spawn_positions[slot % spawn_positions.len()];
+                let entity = spawn_player(
+                    &mut commands,
+                    slot,
+                    char_index,
+                    spawn_pos,
+                    &asset_server,
+                    &mut texture_atlas_layouts,
+                );
+                slots.set(slot, SlotState::Alive(entity));
+                info!("Player {} spawned", slot);
+            } else {
+                slots.set(slot, SlotState::Previewing(char_index, new_remaining));
+            }
         }
     }
 }
@@ -74,12 +101,14 @@ pub fn handle_join_respawn(
 fn spawn_player(
     commands: &mut Commands,
     slot: usize,
+    character_index: usize,
     position: Vec2,
     asset_server: &Res<AssetServer>,
     texture_atlas_layouts: &mut ResMut<Assets<TextureAtlasLayout>>,
 ) -> Entity {
     let color = SLOT_COLORS[slot];
-    let character = character_for_slot(slot);
+    let roster = crate::characters::all_characters();
+    let character = roster[character_index % roster.len()].clone();
     info!("Spawning {} for slot {}", character.name, slot);
 
     // Capsule collider: radius 10.5 (21 wide), length 70 (total height ~91)

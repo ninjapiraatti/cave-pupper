@@ -13,6 +13,8 @@ pub enum SlotState {
     #[default]
     Empty,
     WaitingToSpawn,
+    /// Previewing character before spawn (character_index, remaining_time)
+    Previewing(usize, f32),
     Alive(Entity),
     Dead,
 }
@@ -21,12 +23,15 @@ pub enum SlotState {
 #[derive(Resource)]
 pub struct PlayerSlots {
     pub states: [SlotState; MAX_SLOTS],
+    /// Player names (placeholders for now)
+    pub names: [String; MAX_SLOTS],
 }
 
 impl Default for PlayerSlots {
     fn default() -> Self {
         Self {
             states: [SlotState::Empty; MAX_SLOTS],
+            names: std::array::from_fn(|i| format!("Player {}", i + 1)),
         }
     }
 }
@@ -34,6 +39,10 @@ impl Default for PlayerSlots {
 impl PlayerSlots {
     pub fn reset(&mut self) {
         self.states = [SlotState::Empty; MAX_SLOTS];
+    }
+
+    pub fn reset_names(&mut self) {
+        self.names = std::array::from_fn(|i| format!("Player {}", i + 1));
     }
 
     pub fn get(&self, slot: usize) -> SlotState {

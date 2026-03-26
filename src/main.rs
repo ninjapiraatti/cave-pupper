@@ -2,6 +2,7 @@ mod arena;
 mod characters;
 mod combat;
 mod game;
+mod hud;
 mod input;
 mod levels;
 mod menu;
@@ -35,6 +36,7 @@ fn main() {
             characters::CharacterPlugin,
             combat::CombatPlugin,
             round::RoundPlugin,
+            hud::HudPlugin,
         ))
         .add_systems(Startup, setup)
         .run();

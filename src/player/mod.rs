@@ -17,6 +17,7 @@ impl Plugin for PlayerPlugin {
                 Update,
                 (
                     systems::handle_join_respawn,
+                    systems::update_previews,
                     systems::update_grounded,
                     systems::handle_wall_contacts,
                     systems::apply_friction,
